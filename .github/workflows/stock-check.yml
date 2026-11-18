@@ -1,0 +1,58 @@
+name: Stock check
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (UTC); GitHub may delay runs a few minutes
+  workflow_dispatch:
+    inputs:
+      test_notify:
+        description: "Send a test push + email instead of checking stock"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write   # lets the job save state.json back to the repo
+
+concurrency:
+  group: stock-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Run stock check
+        run: python check_stock.py ${{ inputs.test_notify && '--test-notify' || '' }}
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+
+      - name: Save debug screenshot on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-screenshot
+          path: debug.png
+          if-no-files-found: ignore
+
+      - name: Save state if it changed
+        run: |
+          git config user.name "stock-bot"
+          git config user.email "stock-bot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || (git commit -m "Update stock state" && git push)
