@@ -39,7 +39,7 @@ def classify(text: str) -> str:
     low = text.lower()
     if "out of stock" in low or "sold out" in low or "unavailable" in low:
         return "OUT"
-    if "in stock" in low or "available" in low or "ships" in low:
+    if "in stock" in low or "available" in low or "in stock online" in low:
         return "IN"
     return "UNKNOWN"
 
